@@ -1,11 +1,11 @@
 import sys
 import re
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+     QAction, QMessageBox, QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QMainWindow,
     QTableWidgetItem, QDialog, QLineEdit, QFormLayout, QHeaderView, QSplitter, QComboBox, QFrame, QMessageBox
 )
 from PyQt5.QtCore import Qt, QRegExp
-from PyQt5.QtGui import QIcon, QFont, QRegExpValidator
+from PyQt5.QtGui import QIcon, QFont, QRegExpValidator, QPalette, QColor
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -25,7 +25,7 @@ class AddDialog(QDialog):
 
         # Название: максимум 12 символов, начинается с буквы, только буквы и цифры
         self.name_input = QLineEdit()
-        name_validator = QRegExpValidator(QRegExp("^[А-Яа-яA-Za-z][А-Яа-яA-Za-z0-9]{0,11}$"))
+        name_validator = QRegExpValidator(QRegExp("^[А-Яа-я][А-Яа-я0-9]{0,11}$"))
         self.name_input.setValidator(name_validator)
 
         # Широта: от -90 до 90
@@ -67,7 +67,7 @@ class AddDialog(QDialog):
         )
 
 
-class TableApp(QWidget):
+class TableApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PyQt5 Table App")
@@ -76,8 +76,9 @@ class TableApp(QWidget):
         self.setFont(FONT)
 
         # Основной макет
-        self.main_layout = QHBoxLayout()
-        self.setLayout(self.main_layout)
+        self.main_widget = QWidget()  # Создаем центральный виджет
+        self.setCentralWidget(self.main_widget)  # Устанавливаем его в QMainWindow
+        self.main_layout = QHBoxLayout(self.main_widget)  # Устанавливаем макет для центрального виджета
 
         # Левая часть: таблица и кнопки (40%)
         self.left_widget = QWidget()
@@ -154,6 +155,8 @@ class TableApp(QWidget):
         self.splitter.addWidget(self.right_widget)
         self.splitter.setSizes([400, 600])  # 40% и 60%
         self.main_layout.addWidget(self.splitter)
+
+        self.create_menu()
 
         # Инициализация данных
         self.row_id = 1
@@ -331,6 +334,47 @@ class TableApp(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка при загрузке файла: {str(e)}")
+
+
+    def create_menu(self):
+        menu_bar = self.menuBar()
+
+        # Устанавливаем фон меню в желтый
+        menu_bar.setStyleSheet("background-color: yellow;")
+
+        menu = menu_bar.addMenu("Меню")
+
+        actions = {
+            "Импорт": self.import_data,
+            "Очистить": self.clear_table,
+            "Отчет": self.toggle_plot,
+            "Связывание": self.bind_action,
+            "Размещение": self.place_action,
+            "Выйти": self.exit_action
+        }
+
+        for name, func in actions.items():
+            action = QAction(name, self)
+            action.triggered.connect(func)
+            menu.addAction(action)
+
+        # Устанавливаем стиль для выделенных пунктов меню
+        menu_bar.setStyleSheet("""
+            QMenu::item:selected {
+                background-color: green;
+                color: white;
+            }
+        """)
+
+
+    def bind_action(self):
+        QMessageBox.information(self, "Связывание", "Связывание выполнено.")
+
+    def place_action(self):
+        QMessageBox.information(self, "Размещение", "Размещение завершено.")
+
+    def exit_action(self):
+        self.close()
 
 
 
