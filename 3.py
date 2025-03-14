@@ -9,6 +9,8 @@ from PyQt5.QtGui import QIcon, QFont, QRegExpValidator
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from PyQt5.QtWidgets import QFileDialog
+
 
 # Устанавливаем шрифт "Courier New" размером 16px (12pt)
 FONT = QFont("Courier New", 12)
@@ -85,10 +87,11 @@ class TableApp(QWidget):
         # Таблица
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["ID", "Название", "Широта", "Долгота", "Тип", "Количество"])
-        self.table.setSortingEnabled(False)
+        self.table.setSortingEnabled(False)  # Отключаем встроенную сортировку
         self.table.horizontalHeader().setStyleSheet("QHeaderView::section { background-color: gray; }")
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Растягиваем столбцы
         self.table.setFont(FONT)
+        self.table.horizontalHeader().sectionClicked.connect(self.sort_table)
         self.left_layout.addWidget(self.table)
 
         # Кнопки
@@ -104,6 +107,7 @@ class TableApp(QWidget):
 
         self.import_button = QPushButton("Импорт")
         self.import_button.setFont(FONT)
+        self.import_button.clicked.connect(self.import_data)
         self.button_row1.addWidget(self.import_button)
 
         self.report_button = QPushButton("Отчет")
@@ -195,15 +199,27 @@ class TableApp(QWidget):
     def add_row(self, name="", lat="0.0", lon="0.0", type_="Пункт", amount="0"):
         row_position = self.table.rowCount()
         self.table.insertRow(row_position)
-        self.table.setItem(row_position, 0, QTableWidgetItem(str(self.row_id)))
-        self.table.item(row_position, 0).setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        self.table.setItem(row_position, 1, QTableWidgetItem(name))
-        self.table.setItem(row_position, 2, QTableWidgetItem(lat))
-        self.table.item(row_position, 2).setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        self.table.setItem(row_position, 3, QTableWidgetItem(lon))
-        self.table.item(row_position, 3).setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        self.table.setItem(row_position, 4, QTableWidgetItem(type_))
-        self.table.setItem(row_position, 5, QTableWidgetItem(amount))
+        
+        id_item = QTableWidgetItem(str(self.row_id))
+        id_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        
+        name_item = QTableWidgetItem(name)
+        lat_item = QTableWidgetItem(str(float(lat)))
+        lat_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        
+        lon_item = QTableWidgetItem(str(float(lon)))
+        lon_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        
+        type_item = QTableWidgetItem(type_)
+        amount_item = QTableWidgetItem(str(int(amount)))
+        
+        self.table.setItem(row_position, 0, id_item)
+        self.table.setItem(row_position, 1, name_item)
+        self.table.setItem(row_position, 2, lat_item)
+        self.table.setItem(row_position, 3, lon_item)
+        self.table.setItem(row_position, 4, type_item)
+        self.table.setItem(row_position, 5, amount_item)
+        
         self.row_id += 1
 
     def clear_table(self):
@@ -233,6 +249,92 @@ class TableApp(QWidget):
         ax.set_ylabel("Широта")
         ax.set_title("График широта-долгота")
         self.canvas.draw()
+
+
+    def sort_table(self, column):
+        """Метод для сортировки таблицы при нажатии на заголовок столбца."""
+
+        # Определяем, какие столбцы числовые, а какие текстовые
+        numeric_columns = {0, 2, 3, 5}  # ID, Широта, Долгота, Количество
+        text_columns = {1, 4}  # Название, Тип
+
+        # Определяем текущий порядок сортировки (Qt.AscendingOrder = 0, Qt.DescendingOrder = 1)
+        current_order = self.table.horizontalHeader().sortIndicatorOrder()
+
+        # Собираем все данные из таблицы в список
+        rows = []
+        for row in range(self.table.rowCount()):
+            row_data = []
+            for col in range(self.table.columnCount()):
+                item = self.table.item(row, col)
+                value = item.text() if item else ""
+                row_data.append(value)
+            rows.append(row_data)
+
+        # Определяем ключ для сортировки
+        if column in numeric_columns:
+            key_func = lambda x: float(x[column]) if x[column] else 0  # Числовая сортировка
+        else:
+            key_func = lambda x: x[column].lower()  # Лексикографическая сортировка (регистр не важен)
+
+        # Определяем порядок сортировки
+        reverse = (current_order == Qt.AscendingOrder)  # Если был по возрастанию — делаем по убыванию
+
+        # Выполняем сортировку
+        rows.sort(key=key_func, reverse=reverse)
+
+        # Очищаем таблицу и заполняем заново
+        self.table.setRowCount(0)
+        for row_data in rows:
+            row_position = self.table.rowCount()
+            self.table.insertRow(row_position)
+            for col, value in enumerate(row_data):
+                item = QTableWidgetItem(value)
+                if col in numeric_columns:  # ID, Широта, Долгота, Количество — делаем нередактируемыми
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                self.table.setItem(row_position, col, item)
+
+        # Обновляем индикатор сортировки (чтобы порядок менялся при следующем клике)
+        self.table.horizontalHeader().setSortIndicator(column, Qt.DescendingOrder if not reverse else Qt.AscendingOrder)
+
+
+    def import_data(self):
+        """Открывает диалоговое окно и загружает данные из TXT-файла в таблицу."""
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "Выбрать файл", "", "Текстовые файлы (*.txt);;Все файлы (*)", options=options
+        )
+
+        if not file_name:
+            return  # Если пользователь отменил выбор файла
+
+        try:
+            with open(file_name, "r", encoding="utf-8") as file:
+                lines = file.readlines()
+
+            # Очищаем текущие данные в таблице
+            self.clear_table()
+
+            # Парсим строки и добавляем их в таблицу
+            for line in lines:
+                parts = line.strip().split()  # Разбиваем строку по пробелам
+                if len(parts) != 5:
+                    QMessageBox.warning(self, "Ошибка", f"Некорректный формат строки: {line}")
+                    continue
+
+                name, type_, lat, lon, amount = parts
+
+                # Добавляем строку в таблицу
+                self.add_row(name, lat, lon, type_, amount)
+
+            QMessageBox.information(self, "Импорт завершен", "Данные успешно загружены!")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка при загрузке файла: {str(e)}")
+
+
+
+
 
 
 if __name__ == "__main__":
