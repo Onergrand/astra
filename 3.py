@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 
 from PyQt5.QtWidgets import QFileDialog
 
+import sqlite3 as db
 
 # Устанавливаем шрифт "Courier New" размером 16px (12pt)
 FONT = QFont("Courier New", 12)
@@ -379,7 +380,8 @@ class TableApp(QMainWindow):
 
 
 
-
+def init_db():
+    db.connect('db.db')
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
