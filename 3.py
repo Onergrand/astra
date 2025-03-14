@@ -161,7 +161,7 @@ class TableApp(QMainWindow):
 
         # Инициализация данных
         self.row_id = 1
-        self.add_mock_data()
+        #self.add_mock_data()
 
     def add_mock_data(self):
         mock_data = [
@@ -201,6 +201,7 @@ class TableApp(QMainWindow):
             return False
 
     def add_row(self, name="", lat="0.0", lon="0.0", type_="Пункт", amount="0"):
+        add_point(name, lat, lon, type_, amount)
         row_position = self.table.rowCount()
         self.table.insertRow(row_position)
         
@@ -227,6 +228,7 @@ class TableApp(QMainWindow):
         self.row_id += 1
 
     def clear_table(self):
+        clear_db()
         self.table.setRowCount(0)
         self.row_id = 1
 
@@ -381,9 +383,59 @@ class TableApp(QMainWindow):
 
 
 def init_db():
-    db.connect('db.db')
+    conn = db.connect('db.db')
+    conn.cursor().execute('''
+    CREATE TABLE IF NOT EXISTS "points" (
+        "id"	INTEGER,
+        "name"	TEXT NOT NULL UNIQUE,
+        "latitude"	REAL NOT NULL,
+        "longitude"	REAL NOT NULL,
+        "type"	TEXT NOT NULL,
+        "amount"	INTEGER NOT NULL,
+        PRIMARY KEY("id" AUTOINCREMENT)
+    );
+    ''')
+    conn.close()
+
+def drop_db():
+    conn = db.connect('db.db')
+    conn.cursor().execute('''
+    DROP TABLE IF EXISTS "points";
+    ''')
+    conn.commit()
+    conn.close()
+
+def add_point(name: str, lat: float, lon: float, type: str, amount: int):
+    '''
+    :param name: Название точки
+    :type name: str
+    :param lan: Широта
+    :type lan: float
+    :param lon: Долгота
+    :type lon: float 
+    :param type: Тип
+    :type type: str
+    :param amout: Количество
+    :type amount: int 
+    '''
+    
+    conn = db.connect('db.db')
+    conn.cursor().execute(f'''
+    INSERT INTO "points"(name, latitude, longitude, type, amount)
+    VALUES ("{name}", {lat}, {lon}, "{type}", {amount})
+    ''')
+    conn.commit()
+
+def clear_db():
+    conn = db.connect('db.db')
+    conn.cursor().execute('''
+    DELETE FROM "points";
+    ''')
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
+    init_db()
     app = QApplication(sys.argv)
     window = TableApp()
     window.show()
