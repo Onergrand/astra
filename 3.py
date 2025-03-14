@@ -11,6 +11,8 @@ from matplotlib.figure import Figure
 
 from PyQt5.QtWidgets import QFileDialog
 
+import math
+
 
 # Устанавливаем шрифт "Courier New" размером 16px (12pt)
 FONT = QFont("Courier New", 12)
@@ -122,6 +124,7 @@ class TableApp(QWidget):
 
         self.link_button = QPushButton("Связывание")
         self.link_button.setFont(FONT)
+        self.link_button.clicked.connect(self.link_points)
         self.button_row2.addWidget(self.link_button)
 
         self.place_button = QPushButton("Размещение")
@@ -332,7 +335,94 @@ class TableApp(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Ошибка при загрузке файла: {str(e)}")
 
+    def calculate_distance(self, lat1, lon1, lat2, lon2):
+        R = 6371  # Радиус Земли в км
+        lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
 
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+
+    def link_points(self):
+        points = []  # Список пунктов и госпиталей (id, широта, долгота, тип)
+        all_nodes = []  # Все узлы для отображения (включая места ранений)
+        edges = []  # Список рёбер (расстояние, точка 1, точка 2)
+
+        # Считываем данные из таблицы
+        for row in range(self.table.rowCount()):
+            id_ = int(self.table.item(row, 0).text())
+            name = self.table.item(row, 1).text()
+            lat = float(self.table.item(row, 2).text())
+            lon = float(self.table.item(row, 3).text())
+            type_ = self.table.item(row, 4).text()
+            
+            # Добавляем все узлы для отображения
+            all_nodes.append((id_, lat, lon, type_))
+            
+            # Добавляем только пункты и госпитали для построения дорог
+            if type_ in ["пункт", "госпиталь"]:
+                points.append((id_, lat, lon, type_))
+
+        # Создаём рёбра между пунктами и госпиталями
+        for i in range(len(points)):
+            for j in range(i + 1, len(points)):
+                id1, lat1, lon1, type1 = points[i]
+                id2, lat2, lon2, type2 = points[j]
+                
+                # Запрещаем соединение между госпиталями
+                if type1 == "Госпиталь" and type2 == "Госпиталь":
+                    continue
+                
+                distance = self.calculate_distance(lat1, lon1, lat2, lon2)
+                edges.append((distance, id1, id2))
+
+        # Сортируем рёбра по расстоянию для алгоритма Крускала
+        edges.sort()
+
+        parent = {id_: id_ for id_, _, _, _ in points}  # Для DSU
+
+        def find(v):
+            if parent[v] != v:
+                parent[v] = find(parent[v])
+            return parent[v]
+
+        def union(v1, v2):
+            root1, root2 = find(v1), find(v2)
+            if root1 != root2:
+                parent[root2] = root1
+
+        selected_edges = []
+        total_distance = 0.0
+
+        for distance, id1, id2 in edges:
+            if find(id1) != find(id2):  # Если не образует цикл
+                union(id1, id2)
+                selected_edges.append((id1, id2))
+                total_distance += distance
+
+        # Отображение узлов и дорог на графике
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        
+        lats = [lat for _, lat, _, _ in all_nodes]
+        lons = [lon for _, _, lon, _ in all_nodes]
+        ax.scatter(lons, lats)
+
+        # Отображение дорог
+        id_to_coords = {id_: (lon, lat) for id_, lat, lon, _ in points}
+        for id1, id2 in selected_edges:
+            lon1, lat1 = id_to_coords[id1]
+            lon2, lat2 = id_to_coords[id2]
+            ax.plot([lon1, lon2], [lat1, lat2], 'k-', linewidth=1)
+        
+        ax.set_xlabel("Долгота")
+        ax.set_ylabel("Широта")
+        ax.set_title("Связанные пункты и госпитали")
+        self.canvas.draw()
+        
+        QMessageBox.information(self, "Связывание завершено", f"Общая длина дорог: {total_distance:.2f} км")
 
 
 
