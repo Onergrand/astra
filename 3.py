@@ -1,11 +1,11 @@
 import sys
 import re
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
+     QAction, QMessageBox, QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QMainWindow,
     QTableWidgetItem, QDialog, QLineEdit, QFormLayout, QHeaderView, QSplitter, QComboBox, QFrame, QMessageBox
 )
 from PyQt5.QtCore import Qt, QRegExp
-from PyQt5.QtGui import QIcon, QFont, QRegExpValidator
+from PyQt5.QtGui import QIcon, QFont, QRegExpValidator, QPalette, QColor
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QFileDialog
 
 import math
 
+import sqlite3 as db
 
 # Устанавливаем шрифт "Courier New" размером 16px (12pt)
 FONT = QFont("Courier New", 12)
@@ -27,7 +28,7 @@ class AddDialog(QDialog):
 
         # Название: максимум 12 символов, начинается с буквы, только буквы и цифры
         self.name_input = QLineEdit()
-        name_validator = QRegExpValidator(QRegExp("^[А-Яа-яA-Za-z][А-Яа-яA-Za-z0-9]{0,11}$"))
+        name_validator = QRegExpValidator(QRegExp("^[А-Яа-я][А-Яа-я0-9]{0,11}$"))
         self.name_input.setValidator(name_validator)
 
         # Широта: от -90 до 90
@@ -69,7 +70,7 @@ class AddDialog(QDialog):
         )
 
 
-class TableApp(QWidget):
+class TableApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PyQt5 Table App")
@@ -78,8 +79,9 @@ class TableApp(QWidget):
         self.setFont(FONT)
 
         # Основной макет
-        self.main_layout = QHBoxLayout()
-        self.setLayout(self.main_layout)
+        self.main_widget = QWidget()  # Создаем центральный виджет
+        self.setCentralWidget(self.main_widget)  # Устанавливаем его в QMainWindow
+        self.main_layout = QHBoxLayout(self.main_widget)  # Устанавливаем макет для центрального виджета
 
         # Левая часть: таблица и кнопки (40%)
         self.left_widget = QWidget()
@@ -158,9 +160,12 @@ class TableApp(QWidget):
         self.splitter.setSizes([400, 600])  # 40% и 60%
         self.main_layout.addWidget(self.splitter)
 
+        self.create_menu()
+
         # Инициализация данных
         self.row_id = 1
-        self.add_mock_data()
+        #self.add_mock_data()
+        
 
     def add_mock_data(self):
         mock_data = [
@@ -200,6 +205,7 @@ class TableApp(QWidget):
             return False
 
     def add_row(self, name="", lat="0.0", lon="0.0", type_="Пункт", amount="0"):
+        add_point(name, lat, lon, type_, amount)
         row_position = self.table.rowCount()
         self.table.insertRow(row_position)
         
@@ -226,6 +232,7 @@ class TableApp(QWidget):
         self.row_id += 1
 
     def clear_table(self):
+        clear_db()
         self.table.setRowCount(0)
         self.row_id = 1
 
@@ -423,11 +430,103 @@ class TableApp(QWidget):
         self.canvas.draw()
         
         QMessageBox.information(self, "Связывание завершено", f"Общая длина дорог: {total_distance:.2f} км")
+    def create_menu(self):
+        menu_bar = self.menuBar()
+
+        # Устанавливаем фон меню в желтый
+        menu_bar.setStyleSheet("background-color: yellow;")
+
+        menu = menu_bar.addMenu("Меню")
+
+        actions = {
+            "Импорт": self.import_data,
+            "Очистить": self.clear_table,
+            "Отчет": self.toggle_plot,
+            "Связывание": self.bind_action,
+            "Размещение": self.place_action,
+            "Выйти": self.exit_action
+        }
+
+        for name, func in actions.items():
+            action = QAction(name, self)
+            action.triggered.connect(func)
+            menu.addAction(action)
+
+        # Устанавливаем стиль для выделенных пунктов меню
+        menu_bar.setStyleSheet("""
+            QMenu::item:selected {
+                background-color: green;
+                color: white;
+            }
+        """)
+
+
+    def bind_action(self):
+        QMessageBox.information(self, "Связывание", "Связывание выполнено.")
+
+    def place_action(self):
+        QMessageBox.information(self, "Размещение", "Размещение завершено.")
+
+    def exit_action(self):
+        self.close()
 
 
 
+
+def init_db():
+    conn = db.connect('db.db')
+    conn.cursor().execute('''
+    CREATE TABLE IF NOT EXISTS "points" (
+        "id"	INTEGER,
+        "name"	TEXT NOT NULL UNIQUE,
+        "latitude"	REAL NOT NULL,
+        "longitude"	REAL NOT NULL,
+        "type"	TEXT NOT NULL,
+        "amount"	INTEGER NOT NULL,
+        PRIMARY KEY("id" AUTOINCREMENT)
+    );
+    ''')
+    conn.close()
+
+def drop_db():
+    conn = db.connect('db.db')
+    conn.cursor().execute('''
+    DROP TABLE IF EXISTS "points";
+    ''')
+    conn.commit()
+    conn.close()
+
+def add_point(name: str, lat: float, lon: float, type: str, amount: int):
+    '''
+    :param name: Название точки
+    :type name: str
+    :param lan: Широта
+    :type lan: float
+    :param lon: Долгота
+    :type lon: float 
+    :param type: Тип
+    :type type: str
+    :param amout: Количество
+    :type amount: int 
+    '''
+    
+    conn = db.connect('db.db')
+    conn.cursor().execute(f'''
+    INSERT INTO "points"(name, latitude, longitude, type, amount)
+    VALUES ("{name}", {lat}, {lon}, "{type}", {amount})
+    ''')
+    conn.commit()
+
+def clear_db():
+    conn = db.connect('db.db')
+    conn.cursor().execute('''
+    DELETE FROM "points";
+    ''')
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
+    init_db()
     app = QApplication(sys.argv)
     window = TableApp()
     window.show()
