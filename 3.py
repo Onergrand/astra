@@ -162,6 +162,7 @@ class TableApp(QMainWindow):
         # Инициализация данных
         self.row_id = 1
         #self.add_mock_data()
+        
 
     def add_mock_data(self):
         mock_data = [
