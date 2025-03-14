@@ -181,6 +181,7 @@ class TableApp(QMainWindow):
             name, lat, lon, type_, amount = dialog.get_values()
             if self.validate_input(name, lat, lon, type_, amount):
                 self.add_row(name, lat, lon, type_, amount)
+                add_point(name, lat, lon, type_, amount)
 
     def validate_input(self, name, lat, lon, type_, amount):
         try:
@@ -205,7 +206,6 @@ class TableApp(QMainWindow):
             return False
 
     def add_row(self, name="", lat="0.0", lon="0.0", type_="Пункт", amount="0"):
-        add_point(name, lat, lon, type_, amount)
         row_position = self.table.rowCount()
         self.table.insertRow(row_position)
         
@@ -525,9 +525,19 @@ def clear_db():
     conn.commit()
     conn.close()
 
+def init_data(app: TableApp):
+    conn = db.connect('db.db')
+    rows = conn.cursor().execute(f'''
+    SELECT *  FROM "points"
+    ''').fetchall()
+
+    for row in rows:
+        stripped_row = [row[1], row[2], row[3], row[4]]
+        app.add_row(*stripped_row)
 if __name__ == "__main__":
     init_db()
     app = QApplication(sys.argv)
     window = TableApp()
+    init_data(window)
     window.show()
     sys.exit(app.exec_())
